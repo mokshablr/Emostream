@@ -28,7 +28,7 @@ def send_emoji_data():
             print(f"Successfully sent: {emoji_data}")
         else:
             print(f"Failed to send: {emoji_data} with status code {response.status_code}")
-        time.sleep(0.01)  # Small delay to simulate real-time sending
+        time.sleep(0.1)  # Small delay to simulate real-time sending
 
 if __name__ == '__main__':
     send_emoji_data()
