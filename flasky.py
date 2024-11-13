@@ -16,7 +16,7 @@ producer = KafkaProducer(
 )
 
 # Define the Kafka topic
-KAFKA_TOPIC = 'emoji-events'
+KAFKA_TOPIC = 'emoji_topic'
 
 def send_to_kafka(data):
     """Function to send data to Kafka asynchronously."""
@@ -36,7 +36,7 @@ def on_send_success(record_metadata):
 def on_send_error(excp):
     print(f"Error sending data to Kafka: {excp}")
 
-@app.route('/send-emoji', methods=['POST'])
+@app.route('/send_emoji', methods=['POST'])
 def send_emoji():
     # Get JSON data from the request
     data = request.get_json()
