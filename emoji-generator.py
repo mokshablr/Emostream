@@ -1,35 +1,40 @@
 import requests
 import random
+import threading
 import time
 from datetime import datetime
 
 # API endpoint URL
-API_URL = 'http://localhost:5000/send_emoji'
+API_ENDPOINT = "http://localhost:5000/send_emoji"
 
-# List of sample emojis and user IDs
+# List of sample emojis
 EMOJIS = ['👏', '😂', '❤️', '😍', '😭', '😡', '👍', '👎']
-USER_IDS = [f'user_{i}' for i in range(1, 101)]
 
-def generate_emoji_data():
-    user_id = random.choice(USER_IDS)
-    emoji = random.choice(EMOJIS)
-    timestamp = datetime.utcnow().isoformat()
-    return {
-        'user_id': user_id,
-        'emoji_type': emoji,
-        'timestamp': timestamp
-    }
+def send_emoji(user_id):
+    """Simulate a client sending emoji data."""
+    while True:
+        data = {
+            "user_id": f"user_{user_id}",
+            "emoji_type": random.choice(EMOJIS),
+            "timestamp": datetime.now().isoformat()
+        }
+        try:
+            response = requests.post(API_ENDPOINT, json=data)
+            if response.status_code == 200:
+                print(f"Successfully sent: {data}")
+            else:
+                print(f"Failed to send: {data} with status code {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"Request error from user_{user_id}: {e}")
+        time.sleep(random.uniform(0.01, 0.05))  # Send data every 10-50ms
 
-def send_emoji_data():
-    for _ in range(1000):  
-        emoji_data = generate_emoji_data()
-        response = requests.post(API_URL, json=emoji_data)
-        if response.status_code == 200:
-            print(f"Successfully sent: {emoji_data}")
-        else:
-            print(f"Failed to send: {emoji_data} with status code {response.status_code}")
-        time.sleep(0.1)  # Small delay to simulate real-time sending
+# Start multiple threads (clients)
+threads = []
+for user_id in range(1, 100):  # 100 clients
+    thread = threading.Thread(target=send_emoji, args=(user_id,))
+    threads.append(thread)
+    thread.start()
 
-if __name__ == '__main__':
-    send_emoji_data()
+for thread in threads:
+    thread.join()
 
