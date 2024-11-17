@@ -1,40 +1,30 @@
 import requests
 import random
-import threading
 import time
-from datetime import datetime
-EMOJIS = ['👏', '😂', '❤️', '😍', '😭', '😡', '👍', '👎']
-API_ENDPOINTS = [
-    {"url": "http://localhost:5000/send_emoji", "server_id": "server_1"},
-    {"url": "http://localhost:5001/send_emoji", "server_id": "server_2"}
-]
-def send_emoji(user_id):
-    """Simulate a client sending emoji data to both Flask servers."""
+import json
+
+def generate_emoji_data():
+    emojis = ['👏', '😂', '❤️', '😍', '😭', '😡', '👍', '👎']
+    user_id = random.randint(1, 100)
+    emoji = random.choice(emojis)
+    timestamp = int(time.time())
+    return {"user_id": user_id, "emoji_type": emoji, "timestamp": timestamp}
+
+API_URL = "http://localhost/send_emoji"  # load balanced using nginx
+
+def send_emoji_data():
     while True:
-        data = {
-            "user_id": f"user_{user_id}",
-            "emoji_type": random.choice(EMOJIS),
-            "timestamp": datetime.now().isoformat()
-        }
-        for api_endpoint in API_ENDPOINTS:
-            data_with_server = data.copy()  
-            data_with_server["server_id"] = api_endpoint["server_id"]  
+        emoji_data = generate_emoji_data()
+        try:
+            response = requests.post(API_URL, json=emoji_data)
+            if response.status_code == 200:
+                print(f"Successfully sent: {emoji_data}")
+            else:
+                error_message = response.json().get('error', 'Unknown error')
+                print(f"Failed to send: {emoji_data}, Status Code: {response.status_code}, response: {error_message}")
 
-            try:
-                response = requests.post(api_endpoint["url"], json=data_with_server)
-                if response.status_code == 200:
-                    print(f"Successfully sent to {api_endpoint['server_id']}: {data_with_server}")
-                else:
-                    print(f"Failed to send to {api_endpoint['server_id']}: {data_with_server} with status code {response.status_code}")
-            except requests.exceptions.RequestException as e:
-                print(f"Request error from user_{user_id} to {api_endpoint['server_id']}: {e}")
-        time.sleep(random.uniform(0.01, 0.05))  
-threads = []
-for user_id in range(1, 100):  
-    thread = threading.Thread(target=send_emoji, args=(user_id,))
-    threads.append(thread)
-    thread.start()
+        except Exception as e:
+            print(f"Error sending data: {e}")
 
-for thread in threads:
-    thread.join()
-
+if __name__ == "__main__":
+    send_emoji_data()
