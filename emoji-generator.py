@@ -1,39 +1,59 @@
+
+
 import requests
 import random
 import threading
 import time
 from datetime import datetime
+
+# API endpoint URLs
+SEND_EMOJI_ENDPOINT = "http://localhost:5000/send_emoji"
+PROCESSED_EMOJIS_ENDPOINT = "http://localhost:5000/processed_emojis"
+
+# List of sample emojis
 EMOJIS = ['👏', '😂', '❤️', '😍', '😭', '😡', '👍', '👎']
-API_ENDPOINTS = [
-    {"url": "http://localhost:5000/send_emoji", "server_id": "server_1"},
-    {"url": "http://localhost:5001/send_emoji", "server_id": "server_2"}
-]
+
 def send_emoji(user_id):
-    """Simulate a client sending emoji data to both Flask servers."""
+    """Simulate a client sending emoji data."""
     while True:
         data = {
             "user_id": f"user_{user_id}",
             "emoji_type": random.choice(EMOJIS),
             "timestamp": datetime.now().isoformat()
         }
-        for api_endpoint in API_ENDPOINTS:
-            data_with_server = data.copy()  
-            data_with_server["server_id"] = api_endpoint["server_id"]  
+        try:
+            response = requests.post(SEND_EMOJI_ENDPOINT, json=data)
+            if response.status_code == 200:
+                print(f"Successfully sent: {data}")
+            else:
+                print(f"Failed to send: {data} with status code {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            print(f"Request error from user_{user_id}: {e}")
+        time.sleep(random.uniform(0.01, 0.05))  # Send data every 10-50ms
 
-            try:
-                response = requests.post(api_endpoint["url"], json=data_with_server)
-                if response.status_code == 200:
-                    print(f"Successfully sent to {api_endpoint['server_id']}: {data_with_server}")
-                else:
-                    print(f"Failed to send to {api_endpoint['server_id']}: {data_with_server} with status code {response.status_code}")
-            except requests.exceptions.RequestException as e:
-                print(f"Request error from user_{user_id} to {api_endpoint['server_id']}: {e}")
-        time.sleep(random.uniform(0.01, 0.05))  
+def consume_processed_emojis():
+    """Fetch processed emojis from the Flask server."""
+    while True:
+        try:
+            response = requests.get(PROCESSED_EMOJIS_ENDPOINT)
+            if response.status_code == 200:
+                print("Processed Emojis:", response.json())
+            else:
+                print("Failed to fetch processed emojis")
+        except requests.exceptions.RequestException as e:
+            print(f"Request error while fetching processed emojis: {e}")
+        time.sleep(1)
+
+# Start multiple threads (clients)
 threads = []
-for user_id in range(1, 100):  
+for user_id in range(1, 100):  # Reduced to 5 clients for readability
     thread = threading.Thread(target=send_emoji, args=(user_id,))
     threads.append(thread)
     thread.start()
+
+# Start the processed emoji consumer
+consumer_thread = threading.Thread(target=consume_processed_emojis, daemon=True)
+consumer_thread.start()
 
 for thread in threads:
     thread.join()
