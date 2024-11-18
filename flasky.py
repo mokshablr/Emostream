@@ -1,4 +1,4 @@
-from kafka import KafkaProducer, KafkaConsumer
+from kafka import KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import KafkaError
 import json
@@ -8,7 +8,10 @@ from threading import Thread
 import threading
 import signal
 import sys
-import queue
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
@@ -17,10 +20,7 @@ def send_to_kafka(data):
     try:
         producer.send(TOPICS[0], data)
     except KafkaError as e:
-        print(f"Failed to send data to Kafka: {e}")
-
-# Flask app setup
-app = Flask(__name__)
+        logging.error(f"Failed to send data to Kafka: {e}")
 
 # Kafka settings
 KAFKA_BROKER = 'localhost:9092'
@@ -39,11 +39,11 @@ def create_topics(topics):
         ]
         if new_topics:
             admin_client.create_topics(new_topics=new_topics)
-            print(f"Topics created: {[topic.name for topic in new_topics]}")
+            logging.info(f"Topics created: {[topic.name for topic in new_topics]}")
         else:
-            print("All topics already exist.")
+            logging.info("All topics already exist.")
     except Exception as e:
-        print(f"Error creating topics: {e}")
+        logging.error(f"Error creating topics: {e}")
 
 # Kafka Producer setup
 producer = KafkaProducer(
@@ -51,24 +51,6 @@ producer = KafkaProducer(
     value_serializer=lambda v: json.dumps(v).encode('utf-8'),
     linger_ms=10
 )
-
-# Kafka Consumer setup
-consumer = KafkaConsumer(
-    TOPICS[1],
-    bootstrap_servers=KAFKA_BROKER,
-    value_deserializer=lambda v: json.loads(v.decode('utf-8')),
-    group_id="emoji_client_group",
-    auto_offset_reset='latest'
-)
-
-# Queue to hold processed messages
-processed_emojis_queue = queue.Queue()
-
-# Function to consume messages and put them in the queue
-def consume_messages():
-    while not shutdown_flag.is_set():
-        for message in consumer:
-            processed_emojis_queue.put(message.value)
 
 # API Endpoint to handle client requests
 @app.route('/send_emoji', methods=['POST'])
@@ -90,19 +72,10 @@ def send_emoji():
 
 @app.route('/emoji')
 def emoji():
-    return f"<p>Send emojis to /send_emoji</p>"
-
-# Endpoint to consume processed emojis
-@app.route('/processed_emojis', methods=['GET'])
-def processed_emojis():
-    messages = []
-    while not processed_emojis_queue.empty() and len(messages) < 10:
-        messages.append(processed_emojis_queue.get())
-    return jsonify(messages), 200
+    return "<p>Send emojis to /send_emoji</p>"
 
 # Producer flush loop (runs in a separate thread)
 def flush_producer():
-    global shutdown_flag
     while not shutdown_flag.is_set():
         producer.flush()
         time.sleep(0.5)
@@ -111,7 +84,7 @@ def flush_producer():
 shutdown_flag = threading.Event()
 def shutdown_handler(signal_received, frame):
     global shutdown_flag
-    print("Shutting down gracefully...")
+    logging.info("Shutting down gracefully...")
     shutdown_flag.set()
     producer.flush()
     producer.close()
@@ -129,9 +102,5 @@ if __name__ == "__main__":
     # Start the flush thread
     flush_thread = Thread(target=flush_producer, daemon=True)
     flush_thread.start()
-
-    # Start the consumer thread
-    consumer_thread = Thread(target=consume_messages, daemon=True)
-    consumer_thread.start()
 
     app.run(debug=True, host='0.0.0.0')
