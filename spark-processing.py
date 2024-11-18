@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, window, count
+from pyspark.sql.functions import col, window, count, expr
 from pyspark.sql.types import StringType, StructType, TimestampType
+import json
 
 # Kafka configuration
 KAFKA_BROKER = "localhost:9092"
@@ -32,19 +33,26 @@ decoded_stream = raw_stream.selectExpr("CAST(value AS STRING) as json_value") \
     .selectExpr("from_json(json_value, 'user_id STRING, emoji_type STRING, timestamp TIMESTAMP') AS data") \
     .select("data.*")
 
-# Perform aggregation: count emojis per 1-minute window
+# Define the scaling function
+def scale_down_emoji_count(count):
+    return 1 if count > 0 else 0
+
+# Register the UDF
+spark.udf.register("scale_down_emoji_count", scale_down_emoji_count)
+
+# Perform aggregation: count emojis per 2-second window and scale down
 aggregated_stream = decoded_stream \
-    .withWatermark("timestamp", "1 minute") \
+    .withWatermark("timestamp", "2 seconds") \
     .groupBy(
-        window(col("timestamp"), "1 minute"),  # 1-minute time windows
+        window(col("timestamp"), "2 seconds"),  # 2-second time windows
         col("emoji_type")
     ).agg(
-        count("emoji_type").alias("count")  # Count emojis per type
+        count("emoji_type").alias("raw_count")  # Count emojis per type
     ).select(
         col("window.start").alias("window_start"),
         col("window.end").alias("window_end"),
         col("emoji_type"),
-        col("count")
+        expr("scale_down_emoji_count(raw_count)").alias("scaled_count")  # Apply scaling
     )
 
 # Write aggregated results to the processed Kafka topic
@@ -55,9 +63,8 @@ query = aggregated_stream \
     .option("kafka.bootstrap.servers", KAFKA_BROKER) \
     .option("topic", OUTPUT_TOPIC) \
     .option("checkpointLocation", "/tmp/spark-checkpoint") \
-    .outputMode("append")\
+    .outputMode("append") \
     .start()
 
 # Await termination of the stream
 query.awaitTermination()
-
