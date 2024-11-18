@@ -2,6 +2,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, window, count, expr
 from pyspark.sql.types import StringType, StructType, TimestampType
 import json
+import math
 
 # Kafka configuration
 KAFKA_BROKER = "localhost:9092"
@@ -33,9 +34,9 @@ decoded_stream = raw_stream.selectExpr("CAST(value AS STRING) as json_value") \
     .selectExpr("from_json(json_value, 'user_id STRING, emoji_type STRING, timestamp TIMESTAMP') AS data") \
     .select("data.*")
 
-# Define the scaling function
+# Define the scaling function to scale the count up by 1000
 def scale_down_emoji_count(count):
-    return 1 if count > 0 else 0
+    return math.ceil(count / 1000)  
 
 # Register the UDF
 spark.udf.register("scale_down_emoji_count", scale_down_emoji_count)
