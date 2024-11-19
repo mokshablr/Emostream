@@ -15,17 +15,17 @@ def listen_to_cluster(cluster_id):
         group_id=group_id
     )
     for message in consumer:
-        print(f"Received from Cluster Publisher {cluster_id}: {message.value}")
-        send_to_flask_endpoint(cluster_id, message.value)
+        print(f"Received from Cluster Publisher {cluster_id}: {message.value}. Sending to {group_id}")
+        send_to_flask_endpoint(group_id, message.value)
 
 
-def send_to_flask_endpoint(cluster_id, data):
-    url = FLASK_ENDPOINT.format(cluster_id)
+def send_to_flask_endpoint(group_id, data):
+    url = FLASK_ENDPOINT.format(group_id)
     headers = {'Content-Type': 'application/json'}
     try:
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
-            print(f"Successfully sent data to Flask endpoint for cluster {cluster_id}")
+            print(f"Successfully sent data to Flask endpoint for group {group_id}")
         else:
             print(f"Failed to send data to Flask endpoint. Status code: {response.status_code}")
     except requests.exceptions.RequestException as e:
@@ -38,5 +38,6 @@ if __name__ == "__main__":
 
     cluster_id = int(sys.argv[1])
     sub_id = int(sys.argv[2])
-    group_id = 'emoji_cluster_'+str(cluster_id)+'sub_'+str(sub_id)
+    group_id = 'emoji_cluster_'+str(cluster_id)+'_sub_'+str(sub_id)
+    print(f"CLUSTER {cluster_id} | SUB {sub_id} | GROUP {group_id}")
     listen_to_cluster(cluster_id)

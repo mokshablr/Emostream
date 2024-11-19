@@ -76,26 +76,27 @@ def flush_producer():
         time.sleep(0.5)
 
 
-@app.route('/emoji_update/<int:cluster_id>', methods=['POST'])
-def publish_to_cluster(cluster_id):
+@app.route('/emoji_update/<string:group_id>', methods=['POST'])
+def publish_to_cluster(group_id):
     message = request.get_json()
-    subscribers = redis_client.hgetall(f'cluster:{cluster_id}')
+    subscribers = redis_client.hgetall(f'group_id:{group_id}')
     logging.info(f"checking clients {subscribers} and {subscribers.items}")
-    for user_id, client_info in subscribers.items():
-        client_info = json.loads(client_info)
-        logging.info(f"Sending message to client {client_info['user_id']} in room {client_info['cluster_id']}")
-        send_message_to_client(client_info['cluster_id'], message)
-    return jsonify({'status': 'Message sent to cluster'}), 200
+    # for user_id, client_info in subscribers.items():
+    #     client_info = json.loads(client_info)
+    #     logging.info(f"Sending message to client {client_info['user_id']} in room {client_info['group_id']}")
+    logging.info(f"Sending message to {group_id}")
+    send_message_to_client(group_id, message)
+    return jsonify({'status': 'Message sent to group'}), 200
 
 
-def send_message_to_client(cluster_id, message):
+def send_message_to_client(group_id, message):
     """Send message to client using WebSockets."""
     try:
         print("EMOJI UPDATE: ", message)
         logging.info("EMOJI Update", message)
-        socketio.emit('emoji_update', message, room=cluster_id)
+        socketio.emit('emoji_update', message, room=group_id)
     except Exception as e:
-        logging.error(f"Error sending message to cluster {cluster_id}: {e}")
+        logging.error(f"Error sending message to group {group_id}: {e}")
 
 pending_subscriptions = {}
 
@@ -104,14 +105,14 @@ pending_subscriptions = {}
 def register_subscriber():
     data = request.get_json()
     user_id = data.get('user_id')
-    cluster_id = data.get('cluster_id')
+    group_id = data.get('group_id')
     
-    if not user_id or not cluster_id:
+    if not user_id or not group_id:
         return jsonify({"error": "Invalid data"}), 400
 
-    redis_client.hset(f'cluster:{cluster_id}', user_id, json.dumps({'user_id':user_id, 'cluster_id': cluster_id}))
+    redis_client.hset(f'group_id:{group_id}', user_id, json.dumps({'user_id':user_id, 'group_id': group_id}))
 
-    pending_subscriptions[user_id] = cluster_id
+    pending_subscriptions[user_id] = group_id
 
     return jsonify({"status": "Client registered successfully"}), 200
 
@@ -119,23 +120,23 @@ def register_subscriber():
 def unregister_subscriber():
     data = request.get_json()
     user_id = data.get('user_id')
-    cluster_id = data.get('cluster_id')
-    if not user_id or not cluster_id:
+    group_id = data.get('group_id')
+    if not user_id or not group_id:
         return jsonify({"error": "Invalid data"}), 400
 
-    redis_client.hdel(f'cluster:{cluster_id}', user_id)
+    redis_client.hdel(f'group_id:{group_id}', user_id)
 
-    socketio.emit('unsubscribe', {'cluster_id': cluster_id}, room=cluster_id)
+    socketio.emit('unsubscribe', {'group_id': group_id}, room=group_id)
     return jsonify({"status": "Client unregistered successfully"}), 200
 
 @socketio.on('connect')
 def handle_connect():
     user_id = request.args.get('user_id')
     if user_id in pending_subscriptions:
-        cluster_id = pending_subscriptions.pop(user_id)
-        join_room(cluster_id)
-        socketio.emit('subscribe', {'cluster_id': cluster_id, 'user_id': user_id}, room=cluster_id)
-        print(f'User {user_id} has joined cluster {cluster_id}')
+        group_id = pending_subscriptions.pop(user_id)
+        join_room(group_id)
+        socketio.emit('subscribe', {'group_id': group_id, 'user_id': user_id}, room=group_id)
+        print(f'User {user_id} has joined group {group_id}')
 
 
 @app.route('/emoji')

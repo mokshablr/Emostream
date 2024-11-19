@@ -14,7 +14,7 @@ sio = socketio.Client()
 @sio.event
 def connect():
     print("Connected to the server")
-    sio.emit('subscribe', {'cluster_id': '1'})
+    sio.emit('subscribe', {'group_id': group_id})
     sio.emit('join', {'sid': sio.sid})
     print("Joined room")
 
@@ -28,31 +28,31 @@ def emoji_update(data):
 
 @sio.event
 def subscribe(data):
-    print(f"New subscription: User {data['user_id']} has joined cluster {data['cluster_id']}")
+    print(f"New subscription: User {data['user_id']} has joined cluster {data['group_id']}")
 
 
-def register_to_cluster(user_id, cluster_id):
+def register_to_cluster(user_id, group_id):
     """Send a request to register the client to a specific cluster."""
     data = {
         'user_id': user_id,
-        'cluster_id': cluster_id,
+        'group_id': group_id,
     }
     response = requests.post(REGISTER_ENDPOINT, json=data)
     if response.status_code == 200:
-        print(f"Client {user_id} registered to cluster {cluster_id} successfully.")
+        print(f"Client {user_id} registered to cluster {group_id} successfully.")
     else:
         print(f"Failed to register. Status code: {response.status_code}")
     sio.connect(f'http://localhost?user_id={user_id}')
 
-def unregister_from_cluster(user_id, cluster_id):
+def unregister_from_cluster(user_id, group_id):
     """Send a request to unregister the client from a specific cluster."""
     data = {
         'user_id': user_id,
-        'cluster_id': cluster_id
+        'group_id': group_id
     }
     response = requests.post(UNREGISTER_ENDPOINT, json=data)
     if response.status_code == 200:
-        print(f"Client {user_id} unregistered from cluster {cluster_id} successfully.")
+        print(f"Client {user_id} unregistered from cluster {group_id} successfully.")
     else:
         print(f"Failed to unregister. Status code: {response.status_code}")
 
@@ -71,18 +71,18 @@ def send_emoji(user_id, emoji_type):
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
-        print("Usage: python client.py <command> <cluster_id> <user_id>")
+        print("Usage: python client.py <command> <group_id> <user_id>. EG: Group ID: emoji_cluster_1_sub_1")
         print("Commands: sub, unsub, send")
         sys.exit(1)
 
     command = sys.argv[1]
-    cluster_id = sys.argv[2]
+    group_id = sys.argv[2]
     user_id = sys.argv[3]
 
     if command == 'sub':
-        register_to_cluster(user_id, cluster_id)
+        register_to_cluster(user_id, group_id)
     elif command == 'unsub':
-        unregister_from_cluster(user_id, cluster_id)
+        unregister_from_cluster(user_id, group_id)
     elif command == 'send':
         if len(sys.argv) < 3:
             print("Usage for send_emoji: python client.py send <user_id> <emoji_type>")
