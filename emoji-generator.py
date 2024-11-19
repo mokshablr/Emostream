@@ -1,5 +1,3 @@
-# WHY THREADING? Need to concurrently send and receive emojis
-
 import requests
 import random
 import time
@@ -12,7 +10,7 @@ from kafka.errors import KafkaError
 
 EMOJIS = ['👏', '😂', '❤️', '😍', '😭', '😡', '👍', '👎']
 
-SEND_EMOJI_ENDPOINT = "http://localhost/send_emoji"  # load balanced using nginx
+SEND_EMOJI_ENDPOINT = "http://localhost/send_emoji"
 
 KAFKA_BROKER = 'localhost:9092'
 PROCESSED_TOPIC = 'processed_emoji_topic'
@@ -45,7 +43,7 @@ def send_emoji_data():
                 print(f"Failed to send: {emoji_data}, Status Code: {response.status_code}, response: {error_message}")
         except Exception as e:
             print(f"Error sending data: {e}")
-        time.sleep(random.uniform(0.01, 0.05))  # Send data every 10-50ms
+        time.sleep(random.uniform(0.01, 0.05))
 
 def consume_processed_emojis():
     """Fetch processed emojis directly from Kafka."""
@@ -57,25 +55,15 @@ def consume_processed_emojis():
     except KafkaError as e:
         print(f"Error consuming messages: {e}")
     finally:
-        consumer.close()  # Ensure the consumer is closed on shutdown
+        consumer.close()
 
-# def signal_handler(sig, frame):
-#     print("Shutdown signal received")
-#     shutdown_flag.set()
 
 if __name__ == "__main__":
-    # Register the signal handler for graceful shutdown
-    # signal.signal(signal.SIGINT, signal_handler)
-    # signal.signal(signal.SIGTERM, signal_handler)
-
-    # Create threads for sending emoji data and consuming processed emojis
     send_thread = threading.Thread(target=send_emoji_data)
     consume_thread = threading.Thread(target=consume_processed_emojis)
 
-    # Start both threads
     send_thread.start()
     consume_thread.start()
 
-    # Join threads to the main thread to keep the script running
     send_thread.join()
     consume_thread.join()
