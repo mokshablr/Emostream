@@ -1,6 +1,8 @@
+from redis import Redis
 from kafka import KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import KafkaError
+from flask_socketio import SocketIO, emit, join_room, leave_room, send
 import json
 import time
 from flask import Flask, request, jsonify
@@ -9,11 +11,14 @@ import threading
 import signal
 import sys
 import logging
+import eventlet
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
+socketio = SocketIO(app, async_mode='eventlet')
+
+redis_client = Redis(host='localhost', port=6379, db=0)
 
 def send_to_kafka(data):
     """Send emoji data to Kafka asynchronously."""
@@ -22,14 +27,11 @@ def send_to_kafka(data):
     except KafkaError as e:
         logging.error(f"Failed to send data to Kafka: {e}")
 
-# Kafka settings
 KAFKA_BROKER = 'localhost:9092'
-TOPICS = ['emoji_topic', 'processed_emoji_topic']
+TOPICS = ['emoji_topic', 'processed_emoji_topic', 'main_publisher_topic', 'cluster_publisher_topic_1', 'cluster_publisher_topic_2', 'cluster_publisher_topic_3']
 
-# Kafka Admin setup for topic creation
 admin_client = KafkaAdminClient(bootstrap_servers=KAFKA_BROKER)
 
-# Create the topics used by architecture
 def create_topics(topics):
     try:
         existing_topics = set(admin_client.list_topics())
@@ -45,14 +47,12 @@ def create_topics(topics):
     except Exception as e:
         logging.error(f"Error creating topics: {e}")
 
-# Kafka Producer setup
 producer = KafkaProducer(
     bootstrap_servers=KAFKA_BROKER,
     value_serializer=lambda v: json.dumps(v).encode('utf-8'),
     linger_ms=10
 )
 
-# API Endpoint to handle client requests
 @app.route('/send_emoji', methods=['POST'])
 def send_emoji():
     """API endpoint to accept emoji data."""
@@ -70,17 +70,78 @@ def send_emoji():
     threading.Thread(target=send_to_kafka, args=(emoji_data,)).start()
     return jsonify({"status": "Emoji data received"}), 200
 
-@app.route('/emoji')
-def emoji():
-    return "<p>Send emojis to /send_emoji</p>"
-
-# Producer flush loop (runs in a separate thread)
 def flush_producer():
     while not shutdown_flag.is_set():
         producer.flush()
         time.sleep(0.5)
 
-# Graceful shutdown for Kafka producer
+
+@app.route('/emoji_update/<int:cluster_id>', methods=['POST'])
+def publish_to_cluster(cluster_id):
+    message = request.get_json()
+    subscribers = redis_client.hgetall(f'cluster:{cluster_id}')
+    logging.info(f"checking clients {subscribers} and {subscribers.items}")
+    for user_id, client_info in subscribers.items():
+        client_info = json.loads(client_info)
+        logging.info(f"Sending message to client {client_info['user_id']} in room {client_info['cluster_id']}")
+        send_message_to_client(client_info['cluster_id'], message)
+    return jsonify({'status': 'Message sent to cluster'}), 200
+
+
+def send_message_to_client(cluster_id, message):
+    """Send message to client using WebSockets."""
+    try:
+        print("EMOJI UPDATE: ", message)
+        logging.info("EMOJI Update", message)
+        socketio.emit('emoji_update', message, room=cluster_id)
+    except Exception as e:
+        logging.error(f"Error sending message to cluster {cluster_id}: {e}")
+
+pending_subscriptions = {}
+
+
+@app.route('/register', methods=['POST'])
+def register_subscriber():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    cluster_id = data.get('cluster_id')
+    
+    if not user_id or not cluster_id:
+        return jsonify({"error": "Invalid data"}), 400
+
+    redis_client.hset(f'cluster:{cluster_id}', user_id, json.dumps({'user_id':user_id, 'cluster_id': cluster_id}))
+
+    pending_subscriptions[user_id] = cluster_id
+
+    return jsonify({"status": "Client registered successfully"}), 200
+
+@app.route('/unregister', methods=['POST'])
+def unregister_subscriber():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    cluster_id = data.get('cluster_id')
+    if not user_id or not cluster_id:
+        return jsonify({"error": "Invalid data"}), 400
+
+    redis_client.hdel(f'cluster:{cluster_id}', user_id)
+
+    socketio.emit('unsubscribe', {'cluster_id': cluster_id}, room=cluster_id)
+    return jsonify({"status": "Client unregistered successfully"}), 200
+
+@socketio.on('connect')
+def handle_connect():
+    user_id = request.args.get('user_id')
+    if user_id in pending_subscriptions:
+        cluster_id = pending_subscriptions.pop(user_id)
+        join_room(cluster_id)
+        socketio.emit('subscribe', {'cluster_id': cluster_id, 'user_id': user_id}, room=cluster_id)
+        print(f'User {user_id} has joined cluster {cluster_id}')
+
+
+@app.route('/emoji')
+def emoji():
+    return "<p>Send emojis to /send_emoji</p>"
+
 shutdown_flag = threading.Event()
 def shutdown_handler(signal_received, frame):
     global shutdown_flag
@@ -91,16 +152,14 @@ def shutdown_handler(signal_received, frame):
     admin_client.close()
     sys.exit(0)
 
-# Attach signal handlers for cleanup on termination
-signal.signal(signal.SIGINT, shutdown_handler)  # Handle Ctrl+C
-signal.signal(signal.SIGTERM, shutdown_handler)  # Handle termination signals
+signal.signal(signal.SIGINT, shutdown_handler)
+signal.signal(signal.SIGTERM, shutdown_handler)
 
 if __name__ == "__main__":
-    # Create topics on startup
+
     create_topics(TOPICS)
 
-    # Start the flush thread
     flush_thread = Thread(target=flush_producer, daemon=True)
     flush_thread.start()
 
-    app.run(debug=True, host='0.0.0.0')
+    socketio.run(app)
