@@ -32,7 +32,8 @@ producer = KafkaProducer(
 
 for message in consumer:
     data = message.value
+    emoji_type = data.get('emoji_type')
     cluster_topic = CLUSTER_PUBLISHER_TOPIC.format(CLUSTER_ID)
-    producer.send(cluster_topic, data)
-    print(f"Cluster Publisher {CLUSTER_ID}: Sent {data}")
+    producer.send(cluster_topic, {'emoji_type': emoji_type})
+    print(f"Cluster Publisher {CLUSTER_ID}: Sent {emoji_type}")
 
