@@ -39,5 +39,5 @@ if __name__ == "__main__":
     cluster_id = int(sys.argv[1])
     sub_id = int(sys.argv[2])
     group_id = 'emoji_cluster_'+str(cluster_id)+'_sub_'+str(sub_id)
-    print(f"CLUSTER {cluster_id} | SUB {sub_id} | GROUP {group_id}")
+    print(f"\n\n======== \t CLUSTER {cluster_id} | SUB {sub_id} | GROUP {group_id} \t ========\n\n")
     listen_to_cluster(cluster_id)

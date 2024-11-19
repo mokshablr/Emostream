@@ -29,7 +29,7 @@ def emoji_update(data):
 
 @sio.event
 def subscribe(data):
-    print(f"New subscription: User {data['user_id']} has joined cluster {data['group_id']}")
+    print(f"New subscription: User {data['user_id']} has joined the group {data['group_id']}")
 
 @sio.event
 def unsubscribe(data):
@@ -96,8 +96,11 @@ if __name__ == '__main__':
     group_id = sys.argv[2]
     user_id = sys.argv[3]
 
+    print(f"\n\n======== \t USER_ID: {user_id} | GROUP_ID: {group_id} \t ========\n\n")
+
     if command == 'sub':
         register_to_cluster(user_id, group_id)
+        print("\n\nPRESS 'u' TO UNSUBSCRIBE and DISCONNECT \n\n")
         threading.Thread(target=listen_for_unsubscribe, daemon=True).start()
 
     elif command == 'unsub':

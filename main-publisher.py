@@ -5,6 +5,8 @@ KAFKA_BROKER = 'localhost:9092'
 AGGREGATED_TOPIC = 'processed_emoji_topic'
 MAIN_PUBLISHER_TOPIC = 'main_publisher_topic'
 
+print(f"\n\n======== \t MAIN PUBLISHER \t ========\n\n")
+
 consumer = KafkaConsumer(
     AGGREGATED_TOPIC,
     bootstrap_servers=KAFKA_BROKER,

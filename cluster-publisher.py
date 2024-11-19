@@ -13,8 +13,8 @@ if __name__ == "__main__":
         sys.exit(1)
     CLUSTER_ID = int(sys.argv[1])
 
-group_id = 'emoji_cluster_'+str(CLUSTER_ID)
-print(group_id)
+    group_id = 'emoji_cluster_'+str(CLUSTER_ID)
+    print(f"\n\n======== \t CLUSTER PUBLISHER {CLUSTER_ID} | GROUP_ID: {group_id} \t ========\n\n")
 
 consumer = KafkaConsumer(
     MAIN_PUBLISHER_TOPIC,
@@ -36,4 +36,3 @@ for message in consumer:
     cluster_topic = CLUSTER_PUBLISHER_TOPIC.format(CLUSTER_ID)
     producer.send(cluster_topic, {'emoji_type': emoji_type})
     print(f"Cluster Publisher {CLUSTER_ID}: Sent {emoji_type}")
-
