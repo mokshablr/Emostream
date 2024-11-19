@@ -124,9 +124,9 @@ def unregister_subscriber():
     if not user_id or not group_id:
         return jsonify({"error": "Invalid data"}), 400
 
-    redis_client.hdel(f'group_id:{group_id}', user_id)
+    # redis_client.hdel(f'group_id:{group_id}', user_id)
 
-    socketio.emit('unsubscribe', {'group_id': group_id}, room=group_id)
+    socketio.emit('unsubscribe', {'group_id': group_id, 'user_id':user_id}, room=group_id)
     return jsonify({"status": "Client unregistered successfully"}), 200
 
 @socketio.on('connect')
@@ -137,6 +137,15 @@ def handle_connect():
         join_room(group_id)
         socketio.emit('subscribe', {'group_id': group_id, 'user_id': user_id}, room=group_id)
         print(f'User {user_id} has joined group {group_id}')
+
+
+@socketio.on('leave')
+def handle_unsubscribe(data):
+    user_id = data['user_id']
+    group_id = data['group_id']
+    leave_room(group_id)
+    redis_client.hdel(f'group_id:{group_id}', user_id)
+    print(f'User {user_id} has left group {group_id}')
 
 
 @app.route('/emoji')

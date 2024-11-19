@@ -3,6 +3,7 @@ import requests
 import json
 import time
 import sys
+import threading
 
 FLASK_SERVER_URL = 'http://localhost'
 REGISTER_ENDPOINT = f'{FLASK_SERVER_URL}/register'
@@ -30,6 +31,13 @@ def emoji_update(data):
 def subscribe(data):
     print(f"New subscription: User {data['user_id']} has joined cluster {data['group_id']}")
 
+@sio.event
+def unsubscribe(data):
+    del_group_id = data['group_id']
+    del_user_id = data['user_id']
+    if del_user_id==user_id:
+        print(f"Unsubscribed from group {del_group_id}")
+        sio.disconnect()  # Disconnect from the server when unsubscribed
 
 def register_to_cluster(user_id, group_id):
     """Send a request to register the client to a specific cluster."""
@@ -53,6 +61,7 @@ def unregister_from_cluster(user_id, group_id):
     response = requests.post(UNREGISTER_ENDPOINT, json=data)
     if response.status_code == 200:
         print(f"Client {user_id} unregistered from cluster {group_id} successfully.")
+        sio.emit('leave', {'user_id': user_id, 'group_id': group_id})
     else:
         print(f"Failed to unregister. Status code: {response.status_code}")
 
@@ -69,9 +78,17 @@ def send_emoji(user_id, emoji_type):
     else:
         print(f"Failed to send emoji. Status code: {response.status_code}")
 
+
+def listen_for_unsubscribe():
+    """Listen for the 'u' keypress to unsubscribe."""
+    while True:
+        user_input = input()
+        if user_input.lower() == 'u':
+            unregister_from_cluster(user_id, group_id)
+
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print("Usage: python client.py <command> <group_id> <user_id>. EG: Group ID: emoji_cluster_1_sub_1")
+    if len(sys.argv) < 4:
+        print("Usage: python client.py <command> <group_id> <user_id>")
         print("Commands: sub, unsub, send")
         sys.exit(1)
 
@@ -81,10 +98,12 @@ if __name__ == '__main__':
 
     if command == 'sub':
         register_to_cluster(user_id, group_id)
+        threading.Thread(target=listen_for_unsubscribe, daemon=True).start()
+
     elif command == 'unsub':
         unregister_from_cluster(user_id, group_id)
     elif command == 'send':
-        if len(sys.argv) < 3:
+        if len(sys.argv) < 4:
             print("Usage for send_emoji: python client.py send <user_id> <emoji_type>")
             sys.exit(1)
         user_id = sys.argv[2]
